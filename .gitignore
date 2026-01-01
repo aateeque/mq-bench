@@ -52,3 +52,10 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+node_modules/
+
+# Pulumi stack configs (contain project IDs, billing accounts)
+infra/Pulumi.*.yaml
+!infra/Pulumi.yaml
+!infra/Pulumi.example.yaml
