@@ -13,6 +13,7 @@ import { createNamespace } from "./k8s/namespace";
 import { createPublisherDeployment } from "./k8s/publisher";
 import { createPullSubscriberDeployment } from "./k8s/pull-subscriber";
 import { createPushSubscriberDeployment } from "./k8s/push-subscriber";
+import { createDatadogAgent } from "./k8s/datadog";
 
 // Create GCP project
 const project = createProject();
@@ -118,6 +119,14 @@ const pushSubscriber = createPushSubscriberDeployment(
     artifactRegistry.registryUri,
     project.projectId
 );
+
+// Datadog Agent (optional - requires API key)
+const datadogApiKey = config.getSecret("datadogApiKey");
+const datadogSite = config.get("datadogSite") ?? "us5.datadoghq.com";
+let datadogAgent: ReturnType<typeof createDatadogAgent> | undefined;
+if (datadogApiKey) {
+    datadogAgent = createDatadogAgent(k8sProvider, namespace, datadogApiKey, datadogSite);
+}
 
 // Get config for push subscription
 const pushEndpointOverride = config.get("pushEndpoint");
