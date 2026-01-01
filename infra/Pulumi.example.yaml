@@ -1,0 +1,10 @@
+# Example Pulumi stack configuration
+# Copy to Pulumi.<stack-name>.yaml and fill in your values
+config:
+  gcp:region: us-central1
+  gcp:project: your-project-id
+  mq-bench-gcp-pubsub:projectId: your-project-id
+  mq-bench-gcp-pubsub:billingAccount: XXXXXX-XXXXXX-XXXXXX
+  mq-bench-gcp-pubsub:useAutopilot: "true"
+  # Optional: specify GitHub repo for Workload Identity Federation
+  # mq-bench-gcp-pubsub:githubRepo: owner/repo
