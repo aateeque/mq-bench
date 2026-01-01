@@ -12,6 +12,9 @@ if (args.Contains("--benchmark"))
 }
 else
 {
+    // Validate configuration before running
+    config.Validate();
+
     // Run custom throughput/latency test
     Console.WriteLine("Starting Publisher Benchmark");
     Console.WriteLine($"Project: {config.ProjectId}");

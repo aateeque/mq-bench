@@ -94,3 +94,14 @@ The benchmarking applications use these environment variables:
 | `MESSAGE_COUNT` | Number of messages to send/receive | `100000` |
 | `MESSAGE_SIZE_BYTES` | Size of message payload | `1024` |
 | `CONCURRENCY_LEVEL` | Number of concurrent operations | `10` |
+| `TEST_DURATION_SECONDS` | Maximum test duration in seconds | `300` (5 minutes) |
+
+## Coding Conventions
+
+### Concurrency
+
+- **Use lock-free code**: Prefer `Interlocked` operations and concurrent collections over locks
+- Use `Interlocked.CompareExchange`, `Interlocked.Increment`, etc. for atomic operations
+- Use `ConcurrentDictionary`, `ConcurrentQueue`, etc. when thread-safe collections are needed
+- Avoid `lock` statements and `Monitor` class
+- Use `SemaphoreSlim` for limiting concurrency (not for mutual exclusion)

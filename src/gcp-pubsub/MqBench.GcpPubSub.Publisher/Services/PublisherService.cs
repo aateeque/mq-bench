@@ -21,49 +21,51 @@ public class PublisherService : IAsyncDisposable
     public async Task<BenchmarkResults> RunThroughputBenchmarkAsync(CancellationToken ct = default)
     {
         using var metrics = new MetricsCollector();
-        metrics.Start();
+        using var semaphore = new SemaphoreSlim(_config.ConcurrencyLevel);
+        var pendingTasks = new List<Task>();
 
-        var tasks = new List<Task>();
+        metrics.Start();
 
         for (int i = 0; i < _config.MessageCount && !ct.IsCancellationRequested; i++)
         {
+            await semaphore.WaitAsync(ct);
+
             var message = BenchmarkMessage.Create(i, _config.MessageSizeBytes);
             var data = message.ToBytes();
             var startTime = DateTime.UtcNow;
 
-            var task = _publisher
-                .PublishAsync(ByteString.CopyFrom(data))
-                .ContinueWith(
-                    t =>
-                    {
-                        if (t.IsCompletedSuccessfully)
-                        {
-                            var latency = DateTime.UtcNow - startTime;
-                            metrics.RecordLatency(latency);
-                            metrics.RecordMessage(data.Length);
-                        }
-                        else
-                        {
-                            metrics.RecordError();
-                        }
-                    },
-                    ct
-                );
-
-            tasks.Add(task);
-
-            // Control concurrency
-            if (tasks.Count >= _config.ConcurrencyLevel)
-            {
-                await Task.WhenAny(tasks);
-                tasks.RemoveAll(t => t.IsCompleted);
-            }
+            var task = PublishWithMetricsAsync(data, startTime, metrics, semaphore, ct);
+            pendingTasks.Add(task);
         }
 
-        await Task.WhenAll(tasks);
+        await Task.WhenAll(pendingTasks);
         metrics.Stop();
 
         return metrics.GetResults();
+    }
+
+    private async Task PublishWithMetricsAsync(
+        byte[] data,
+        DateTime startTime,
+        MetricsCollector metrics,
+        SemaphoreSlim semaphore,
+        CancellationToken ct)
+    {
+        try
+        {
+            await _publisher.PublishAsync(ByteString.CopyFrom(data));
+            var latency = DateTime.UtcNow - startTime;
+            metrics.RecordLatency(latency);
+            metrics.RecordMessage(data.Length);
+        }
+        catch
+        {
+            metrics.RecordError();
+        }
+        finally
+        {
+            semaphore.Release();
+        }
     }
 
     public async ValueTask DisposeAsync()

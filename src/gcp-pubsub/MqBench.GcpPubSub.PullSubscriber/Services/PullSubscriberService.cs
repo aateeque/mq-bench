@@ -9,10 +9,12 @@ public class PullSubscriberService : IAsyncDisposable
 {
     private readonly SubscriberClient _subscriber;
     private readonly BenchmarkConfig _config;
+    private readonly Action<string> _log;
 
-    public PullSubscriberService(BenchmarkConfig config)
+    public PullSubscriberService(BenchmarkConfig config, Action<string>? log = null)
     {
         _config = config;
+        _log = log ?? Console.WriteLine;
         var subscriptionName = SubscriptionName.FromProjectSubscription(
             config.ProjectId,
             config.SubscriptionId
@@ -47,8 +49,9 @@ public class PullSubscriberService : IAsyncDisposable
 
                     return SubscriberClient.Reply.Ack;
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _log($"Error processing message {msg.MessageId}: {ex.Message}");
                     metrics.RecordError();
                     return SubscriberClient.Reply.Nack;
                 }

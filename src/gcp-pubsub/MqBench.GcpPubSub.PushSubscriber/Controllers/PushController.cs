@@ -9,17 +9,29 @@ namespace MqBench.GcpPubSub.PushSubscriber.Controllers;
 public class PushController : ControllerBase
 {
     private readonly PushMetricsService _metricsService;
+    private readonly PubSubAuthenticationService _authService;
     private readonly ILogger<PushController> _logger;
 
-    public PushController(PushMetricsService metricsService, ILogger<PushController> logger)
+    public PushController(
+        PushMetricsService metricsService,
+        PubSubAuthenticationService authService,
+        ILogger<PushController> logger)
     {
         _metricsService = metricsService;
+        _authService = authService;
         _logger = logger;
     }
 
     [HttpPost]
-    public IActionResult ReceiveMessage([FromBody] PubSubPushMessage pushMessage)
+    public async Task<IActionResult> ReceiveMessage([FromBody] PubSubPushMessage pushMessage)
     {
+        // Validate Pub/Sub authentication token
+        var authHeader = Request.Headers.Authorization.FirstOrDefault();
+        if (!await _authService.ValidateTokenAsync(authHeader))
+        {
+            return Unauthorized();
+        }
+
         try
         {
             var data = Convert.FromBase64String(pushMessage.Message.Data);

@@ -13,5 +13,40 @@ public class BenchmarkConfig
     public int BatchSize { get; set; } = int.TryParse(Environment.GetEnvironmentVariable("BATCH_SIZE"), out var bs) ? bs : 100;
     public int WarmupCount { get; set; } = 1000;
     public int ConcurrencyLevel { get; set; } = int.TryParse(Environment.GetEnvironmentVariable("CONCURRENCY_LEVEL"), out var cl) ? cl : 10;
-    public TimeSpan TestDuration { get; set; } = TimeSpan.FromMinutes(5);
+    public TimeSpan TestDuration { get; set; } = int.TryParse(Environment.GetEnvironmentVariable("TEST_DURATION_SECONDS"), out var td) ? TimeSpan.FromSeconds(td) : TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// Validates the configuration and throws if required values are missing.
+    /// </summary>
+    public void Validate(bool requireSubscription = false)
+    {
+        var errors = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(ProjectId))
+            errors.Add("GCP_PROJECT_ID environment variable is required");
+
+        if (string.IsNullOrWhiteSpace(TopicId))
+            errors.Add("PUBSUB_TOPIC environment variable is required");
+
+        if (requireSubscription && string.IsNullOrWhiteSpace(SubscriptionId))
+            errors.Add("PUBSUB_SUBSCRIPTION environment variable is required");
+
+        if (MessageCount <= 0)
+            errors.Add("MESSAGE_COUNT must be greater than 0");
+
+        if (MessageSizeBytes <= 0)
+            errors.Add("MESSAGE_SIZE_BYTES must be greater than 0");
+
+        if (ConcurrencyLevel <= 0)
+            errors.Add("CONCURRENCY_LEVEL must be greater than 0");
+
+        if (TestDuration <= TimeSpan.Zero)
+            errors.Add("TEST_DURATION_SECONDS must be greater than 0");
+
+        if (errors.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"Configuration validation failed:\n- {string.Join("\n- ", errors)}");
+        }
+    }
 }

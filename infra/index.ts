@@ -100,21 +100,23 @@ const pushSubscriber = createPushSubscriberDeployment(
     project.projectId
 );
 
-// Create push subscription after LoadBalancer is ready
-const pushEndpoint = pushSubscriber.service.status.apply((status) => {
-    const ingress = status?.loadBalancer?.ingress?.[0];
-    if (ingress?.ip) {
-        return `http://${ingress.ip}/push`;
-    }
-    return "http://placeholder.example.com/push";
-});
+// Get config for push subscription
+const config = new pulumi.Config();
+const pushEndpointOverride = config.get("pushEndpoint");
 
-const pushSubscription = createPushSubscription(
-    project,
-    pubsub.topic,
-    pushEndpoint,
-    serviceAccounts.benchmarkSa.email
-);
+// Create push subscription only if endpoint is explicitly configured
+// On first deployment, the LoadBalancer IP is not yet known
+// After deployment, run: pulumi config set pushEndpoint http://<LOAD_BALANCER_IP>/push
+// Then run: pulumi up
+let pushSubscription: gcp.pubsub.Subscription | undefined;
+if (pushEndpointOverride) {
+    pushSubscription = createPushSubscription(
+        project,
+        pubsub.topic,
+        pulumi.output(pushEndpointOverride),
+        serviceAccounts.benchmarkSa.email
+    );
+}
 
 // Exports
 export const projectId = project.projectId;
@@ -122,8 +124,15 @@ export const gkeClusterName = gkeCluster.name;
 export const gkeEndpoint = gkeCluster.endpoint;
 export const topicName = pubsub.topic.name;
 export const pullSubscriptionName = pubsub.pullSubscription.name;
-export const pushSubscriptionName = pushSubscription.name;
+export const pushSubscriptionName = pushSubscription?.name ?? pulumi.output("not-configured");
 export const artifactRegistryUrl = artifactRegistry.registryUri;
 export const pushSubscriberIp = pushSubscriber.service.status.apply(
     (status) => status?.loadBalancer?.ingress?.[0]?.ip ?? "pending"
+);
+
+// Instructions for push subscription setup
+export const pushSubscriptionInstructions = pushSubscriberIp.apply((ip) =>
+    ip === "pending"
+        ? "Waiting for LoadBalancer IP..."
+        : `Run: pulumi config set pushEndpoint http://${ip}/push && pulumi up`
 );

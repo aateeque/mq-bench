@@ -5,18 +5,14 @@ namespace MqBench.GcpPubSub.PushSubscriber.Services;
 public class PushMetricsService : IDisposable
 {
     private readonly MetricsCollector _metrics = new();
-    private bool _started;
-    private readonly object _lock = new();
+    private int _started;
 
     public void RecordMessage(TimeSpan latency, int byteCount)
     {
-        lock (_lock)
+        // Lock-free start using Interlocked.CompareExchange
+        if (Interlocked.CompareExchange(ref _started, 1, 0) == 0)
         {
-            if (!_started)
-            {
-                _metrics.Start();
-                _started = true;
-            }
+            _metrics.Start();
         }
 
         _metrics.RecordLatency(latency);
@@ -33,10 +29,7 @@ public class PushMetricsService : IDisposable
 
     public void Reset()
     {
-        lock (_lock)
-        {
-            _started = false;
-        }
+        Interlocked.Exchange(ref _started, 0);
     }
 
     public void Dispose() => _metrics.Dispose();

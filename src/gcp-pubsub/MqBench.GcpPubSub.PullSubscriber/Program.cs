@@ -3,6 +3,9 @@ using MqBench.GcpPubSub.PullSubscriber.Services;
 
 var config = new BenchmarkConfig();
 
+// Validate configuration (requireSubscription=true for pull subscriber)
+config.Validate(requireSubscription: true);
+
 Console.WriteLine("Starting Pull Subscriber Benchmark");
 Console.WriteLine($"Project: {config.ProjectId}");
 Console.WriteLine($"Subscription: {config.SubscriptionId}");
