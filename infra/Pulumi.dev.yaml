@@ -1,0 +1,6 @@
+config:
+  gcp:region: us-central1
+  mq-bench-gcp-pubsub:projectId: mq-bench-pubsub-CHANGE_ME
+  mq-bench-gcp-pubsub:billingAccount: XXXXX-XXXXX-XXXXX
+  # mq-bench-gcp-pubsub:orgId: "123456789"
+  mq-bench-gcp-pubsub:useAutopilot: "true"
