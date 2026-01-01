@@ -122,9 +122,10 @@ const pushSubscriber = createPushSubscriberDeployment(
 
 // Datadog Agent (optional - requires API key)
 const datadogApiKey = config.getSecret("datadogApiKey");
+const datadogSite = config.get("datadogSite") ?? "us5.datadoghq.com";
 let datadogAgent: ReturnType<typeof createDatadogAgent> | undefined;
 if (datadogApiKey) {
-    datadogAgent = createDatadogAgent(k8sProvider, namespace, datadogApiKey);
+    datadogAgent = createDatadogAgent(k8sProvider, namespace, datadogApiKey, datadogSite);
 }
 
 // Get config for push subscription

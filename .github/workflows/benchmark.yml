@@ -35,7 +35,7 @@ on:
         type: string
 
 env:
-  GCP_PROJECT_ID: mq-bench
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID || 'mq-bench' }}
   GCP_REGION: us-central1
   GKE_CLUSTER: mq-bench-gke
   NAMESPACE: mq-bench
@@ -78,8 +78,13 @@ jobs:
           metadata:
             name: benchmark-publisher
             namespace: ${{ env.NAMESPACE }}
+            labels:
+              benchmark.config/message_count: "${{ inputs.message_count }}"
+              benchmark.config/message_size: "${{ inputs.message_size }}"
+              benchmark.config/concurrency: "${{ inputs.concurrency }}"
           spec:
-            ttlSecondsAfterFinished: 3600
+            ttlSecondsAfterFinished: 86400
+            backoffLimit: 0
             template:
               metadata:
                 labels:
@@ -112,15 +117,19 @@ jobs:
                     value: "${{ github.sha }}"
                   resources:
                     requests:
-                      memory: "256Mi"
+                      memory: "512Mi"
                       cpu: "500m"
                     limits:
-                      memory: "512Mi"
-                      cpu: "1000m"
+                      memory: "2Gi"
+                      cpu: "2000m"
           EOF
 
-          # Wait for job to complete
-          kubectl wait --for=condition=complete job/benchmark-publisher -n ${{ env.NAMESPACE }} --timeout=600s || true
+          # Wait for job to complete (fail workflow if job fails)
+          if ! kubectl wait --for=condition=complete job/benchmark-publisher -n ${{ env.NAMESPACE }} --timeout=600s; then
+            echo "❌ Publisher benchmark failed or timed out"
+            kubectl logs job/benchmark-publisher -n ${{ env.NAMESPACE }} || true
+            exit 1
+          fi
 
           echo "📊 Publisher Results:"
           kubectl logs job/benchmark-publisher -n ${{ env.NAMESPACE }}
@@ -138,8 +147,12 @@ jobs:
           metadata:
             name: benchmark-pull-subscriber
             namespace: ${{ env.NAMESPACE }}
+            labels:
+              benchmark.config/message_count: "${{ inputs.message_count }}"
+              benchmark.config/duration: "${{ inputs.duration_seconds }}"
           spec:
-            ttlSecondsAfterFinished: 3600
+            ttlSecondsAfterFinished: 86400
+            backoffLimit: 0
             template:
               metadata:
                 labels:
@@ -170,17 +183,88 @@ jobs:
                     value: "${{ github.sha }}"
                   resources:
                     requests:
-                      memory: "256Mi"
+                      memory: "512Mi"
                       cpu: "500m"
                     limits:
-                      memory: "512Mi"
-                      cpu: "1000m"
+                      memory: "2Gi"
+                      cpu: "2000m"
           EOF
 
-          kubectl wait --for=condition=complete job/benchmark-pull-subscriber -n ${{ env.NAMESPACE }} --timeout=600s || true
+          if ! kubectl wait --for=condition=complete job/benchmark-pull-subscriber -n ${{ env.NAMESPACE }} --timeout=600s; then
+            echo "❌ Pull subscriber benchmark failed or timed out"
+            kubectl logs job/benchmark-pull-subscriber -n ${{ env.NAMESPACE }} || true
+            exit 1
+          fi
 
           echo "📊 Pull Subscriber Results:"
           kubectl logs job/benchmark-pull-subscriber -n ${{ env.NAMESPACE }}
+
+      - name: Run Push Subscriber Benchmark
+        if: ${{ inputs.benchmark_type == 'all' || inputs.benchmark_type == 'push-subscriber' }}
+        run: |
+          echo "🚀 Starting Push Subscriber Benchmark"
+          echo "Note: Push subscriber runs as a deployment, monitoring for ${{ inputs.duration_seconds }}s"
+
+          # Get current pod count and restart deployments to get fresh metrics
+          kubectl rollout restart deployment/mq-bench-push-subscriber -n ${{ env.NAMESPACE }}
+          kubectl rollout status deployment/mq-bench-push-subscriber -n ${{ env.NAMESPACE }} --timeout=120s
+
+          # Run publisher to generate load for push subscriber
+          kubectl delete job benchmark-push-load -n ${{ env.NAMESPACE }} --ignore-not-found
+
+          cat <<EOF | kubectl apply -f -
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: benchmark-push-load
+            namespace: ${{ env.NAMESPACE }}
+            labels:
+              benchmark.config/message_count: "${{ inputs.message_count }}"
+              benchmark.config/message_size: "${{ inputs.message_size }}"
+          spec:
+            ttlSecondsAfterFinished: 86400
+            backoffLimit: 0
+            template:
+              metadata:
+                labels:
+                  app: benchmark-push-load
+              spec:
+                serviceAccountName: benchmark-sa
+                restartPolicy: Never
+                containers:
+                - name: publisher
+                  image: us-central1-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/mq-bench/publisher:latest
+                  env:
+                  - name: GCP_PROJECT_ID
+                    value: "${{ env.GCP_PROJECT_ID }}"
+                  - name: PUBSUB_TOPIC
+                    value: "mq-bench-topic"
+                  - name: MESSAGE_COUNT
+                    value: "${{ inputs.message_count }}"
+                  - name: MESSAGE_SIZE_BYTES
+                    value: "${{ inputs.message_size }}"
+                  - name: CONCURRENCY_LEVEL
+                    value: "${{ inputs.concurrency }}"
+                  resources:
+                    requests:
+                      memory: "512Mi"
+                      cpu: "500m"
+                    limits:
+                      memory: "2Gi"
+                      cpu: "2000m"
+          EOF
+
+          if ! kubectl wait --for=condition=complete job/benchmark-push-load -n ${{ env.NAMESPACE }} --timeout=600s; then
+            echo "❌ Push load generation failed or timed out"
+            kubectl logs job/benchmark-push-load -n ${{ env.NAMESPACE }} || true
+            exit 1
+          fi
+
+          echo "📊 Push Subscriber Logs (last 100 lines per pod):"
+          for pod in $(kubectl get pods -n ${{ env.NAMESPACE }} -l app=mq-bench-push-subscriber -o jsonpath='{.items[*].metadata.name}'); do
+            echo "--- $pod ---"
+            kubectl logs $pod -n ${{ env.NAMESPACE }} --tail=100
+          done
 
       - name: Summary
         run: |
@@ -193,3 +277,4 @@ jobs:
           echo "| Size | ${{ inputs.message_size }} bytes |" >> $GITHUB_STEP_SUMMARY
           echo "| Concurrency | ${{ inputs.concurrency }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Duration | ${{ inputs.duration_seconds }}s |" >> $GITHUB_STEP_SUMMARY
+          echo "| Project | ${{ env.GCP_PROJECT_ID }} |" >> $GITHUB_STEP_SUMMARY

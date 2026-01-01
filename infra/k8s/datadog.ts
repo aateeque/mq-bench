@@ -4,11 +4,13 @@ import * as pulumi from "@pulumi/pulumi";
 export function createDatadogAgent(
     provider: k8s.Provider,
     namespace: k8s.core.v1.Namespace,
-    datadogApiKey: pulumi.Output<string>
+    datadogApiKey: pulumi.Output<string>,
+    datadogSite: string = "us5.datadoghq.com"
 ) {
-    // Datadog Agent Deployment for GKE Autopilot (no hostPath allowed)
-    // Uses a Deployment instead of DaemonSet for Autopilot compatibility
-    const agent = new k8s.apps.v1.Deployment(
+    // Datadog Agent DaemonSet for GKE Autopilot
+    // Note: hostPath volumes are not allowed in Autopilot, so we skip node-level metrics
+    // DaemonSets themselves are fully supported in GKE Autopilot (1.21+)
+    const agent = new k8s.apps.v1.DaemonSet(
         "datadog-agent",
         {
             metadata: {
@@ -19,7 +21,6 @@ export function createDatadogAgent(
                 },
             },
             spec: {
-                replicas: 1,
                 selector: {
                     matchLabels: {
                         app: "datadog-agent",
@@ -49,7 +50,7 @@ export function createDatadogAgent(
                                     },
                                     {
                                         name: "DD_SITE",
-                                        value: "us5.datadoghq.com",
+                                        value: datadogSite,
                                     },
                                     {
                                         name: "DD_DOGSTATSD_NON_LOCAL_TRAFFIC",
@@ -63,6 +64,14 @@ export function createDatadogAgent(
                                         name: "DD_APM_NON_LOCAL_TRAFFIC",
                                         value: "true",
                                     },
+                                    {
+                                        name: "DD_KUBERNETES_KUBELET_NODENAME",
+                                        valueFrom: {
+                                            fieldRef: {
+                                                fieldPath: "spec.nodeName",
+                                            },
+                                        },
+                                    },
                                 ],
                                 ports: [
                                     { containerPort: 8125, name: "dogstatsd", protocol: "UDP" },
@@ -70,11 +79,11 @@ export function createDatadogAgent(
                                 ],
                                 resources: {
                                     requests: {
-                                        memory: "256Mi",
+                                        memory: "512Mi",
                                         cpu: "250m",
                                     },
                                     limits: {
-                                        memory: "512Mi",
+                                        memory: "1Gi",
                                         cpu: "500m",
                                     },
                                 },
@@ -160,7 +169,7 @@ export function createDatadogAgent(
         { provider }
     );
 
-    // Service for DogStatsD (so pods can send metrics)
+    // Service for DogStatsD (ClusterIP for proper load balancing)
     const service = new k8s.core.v1.Service(
         "datadog-agent-svc",
         {
@@ -176,7 +185,6 @@ export function createDatadogAgent(
                     { port: 8125, targetPort: 8125, protocol: "UDP", name: "dogstatsd" },
                     { port: 8126, targetPort: 8126, protocol: "TCP", name: "apm" },
                 ],
-                clusterIP: "None", // Headless service
             },
         },
         { provider }
