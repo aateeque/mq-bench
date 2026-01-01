@@ -6,8 +6,9 @@ export function createDatadogAgent(
     namespace: k8s.core.v1.Namespace,
     datadogApiKey: pulumi.Output<string>
 ) {
-    // Datadog Agent DaemonSet for metrics collection
-    const agent = new k8s.apps.v1.DaemonSet(
+    // Datadog Agent Deployment for GKE Autopilot (no hostPath allowed)
+    // Uses a Deployment instead of DaemonSet for Autopilot compatibility
+    const agent = new k8s.apps.v1.Deployment(
         "datadog-agent",
         {
             metadata: {
@@ -18,6 +19,7 @@ export function createDatadogAgent(
                 },
             },
             spec: {
+                replicas: 1,
                 selector: {
                     matchLabels: {
                         app: "datadog-agent",
@@ -34,7 +36,7 @@ export function createDatadogAgent(
                         containers: [
                             {
                                 name: "datadog-agent",
-                                image: "gcr.io/datadoghq/agent:latest",
+                                image: "gcr.io/datadoghq/agent:7",
                                 env: [
                                     {
                                         name: "DD_API_KEY",
@@ -47,15 +49,7 @@ export function createDatadogAgent(
                                     },
                                     {
                                         name: "DD_SITE",
-                                        value: "datadoghq.com",
-                                    },
-                                    {
-                                        name: "DD_KUBERNETES_KUBELET_NODENAME",
-                                        valueFrom: {
-                                            fieldRef: {
-                                                fieldPath: "spec.nodeName",
-                                            },
-                                        },
+                                        value: "us5.datadoghq.com",
                                     },
                                     {
                                         name: "DD_DOGSTATSD_NON_LOCAL_TRAFFIC",
@@ -66,11 +60,7 @@ export function createDatadogAgent(
                                         value: "true",
                                     },
                                     {
-                                        name: "DD_LOGS_ENABLED",
-                                        value: "true",
-                                    },
-                                    {
-                                        name: "DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL",
+                                        name: "DD_APM_NON_LOCAL_TRAFFIC",
                                         value: "true",
                                     },
                                 ],
@@ -81,43 +71,13 @@ export function createDatadogAgent(
                                 resources: {
                                     requests: {
                                         memory: "256Mi",
-                                        cpu: "200m",
+                                        cpu: "250m",
                                     },
                                     limits: {
                                         memory: "512Mi",
                                         cpu: "500m",
                                     },
                                 },
-                                volumeMounts: [
-                                    {
-                                        name: "dockersocket",
-                                        mountPath: "/var/run/docker.sock",
-                                    },
-                                    {
-                                        name: "procdir",
-                                        mountPath: "/host/proc",
-                                        readOnly: true,
-                                    },
-                                    {
-                                        name: "cgroups",
-                                        mountPath: "/host/sys/fs/cgroup",
-                                        readOnly: true,
-                                    },
-                                ],
-                            },
-                        ],
-                        volumes: [
-                            {
-                                name: "dockersocket",
-                                hostPath: { path: "/var/run/docker.sock" },
-                            },
-                            {
-                                name: "procdir",
-                                hostPath: { path: "/proc" },
-                            },
-                            {
-                                name: "cgroups",
-                                hostPath: { path: "/sys/fs/cgroup" },
                             },
                         ],
                     },
