@@ -5,7 +5,7 @@ import * as k8s from "@pulumi/kubernetes";
 import { createProject } from "./project";
 import { enableApis } from "./apis";
 import { createNetworking } from "./networking";
-import { createServiceAccounts } from "./iam";
+import { createServiceAccounts, createWorkloadIdentityBinding, createGitHubActionsIdentity } from "./iam";
 import { createGkeCluster } from "./gke";
 import { createPubSubResources, createPushSubscription } from "./pubsub";
 import { createArtifactRegistry } from "./artifact-registry";
@@ -26,11 +26,23 @@ const networking = createNetworking(project, apis);
 // Create service accounts and IAM bindings
 const serviceAccounts = createServiceAccounts(project, apis);
 
+// Create GitHub Actions Workload Identity Federation
+const config = new pulumi.Config();
+const githubRepo = config.get("githubRepo") ?? "aateeque/mq-bench";
+const githubActionsIdentity = createGitHubActionsIdentity(project, apis, githubRepo);
+
 // Create Artifact Registry for Docker images
 const artifactRegistry = createArtifactRegistry(project, apis);
 
 // Create GKE cluster
 const gkeCluster = createGkeCluster(project, apis, networking, serviceAccounts);
+
+// Create Workload Identity binding (must be after GKE cluster creates the identity pool)
+const workloadIdentityBinding = createWorkloadIdentityBinding(
+    project,
+    serviceAccounts.benchmarkSa,
+    gkeCluster
+);
 
 // Create Pub/Sub topic and pull subscription
 const pubsub = createPubSubResources(project, apis);
@@ -38,32 +50,39 @@ const pubsub = createPubSubResources(project, apis);
 // Create Kubernetes provider using GKE cluster credentials
 const k8sProvider = new k8s.Provider("gke-k8s", {
     kubeconfig: pulumi
-        .all([gkeCluster.name, gkeCluster.endpoint, gkeCluster.masterAuth])
-        .apply(([name, endpoint, masterAuth]) => {
-            const context = `gke_${project.projectId}_${networking.region}_${name}`;
-            return `apiVersion: v1
-clusters:
-- cluster:
-    certificate-authority-data: ${masterAuth.clusterCaCertificate}
-    server: https://${endpoint}
-  name: ${context}
-contexts:
-- context:
-    cluster: ${context}
-    user: ${context}
-  name: ${context}
-current-context: ${context}
-kind: Config
-preferences: {}
-users:
-- name: ${context}
-  user:
-    exec:
-      apiVersion: client.authentication.k8s.io/v1beta1
-      command: gke-gcloud-auth-plugin
-      installHint: Install gke-gcloud-auth-plugin for use with kubectl by following https://cloud.google.com/blog/products/containers-kubernetes/kubectl-auth-changes-in-gke
-      provideClusterInfo: true
-`;
+        .all([gkeCluster.name, gkeCluster.endpoint, gkeCluster.masterAuth, project.projectId])
+        .apply(([name, endpoint, masterAuth, projectId]) => {
+            const context = `gke_${projectId}_${networking.region}_${name}`;
+            const kubeconfig = {
+                apiVersion: "v1",
+                kind: "Config",
+                clusters: [{
+                    name: context,
+                    cluster: {
+                        "certificate-authority-data": masterAuth.clusterCaCertificate,
+                        server: `https://${endpoint}`,
+                    },
+                }],
+                contexts: [{
+                    name: context,
+                    context: {
+                        cluster: context,
+                        user: context,
+                    },
+                }],
+                "current-context": context,
+                users: [{
+                    name: context,
+                    user: {
+                        exec: {
+                            apiVersion: "client.authentication.k8s.io/v1beta1",
+                            command: "gke-gcloud-auth-plugin",
+                            provideClusterInfo: true,
+                        },
+                    },
+                }],
+            };
+            return JSON.stringify(kubeconfig);
         }),
 });
 
@@ -101,7 +120,6 @@ const pushSubscriber = createPushSubscriberDeployment(
 );
 
 // Get config for push subscription
-const config = new pulumi.Config();
 const pushEndpointOverride = config.get("pushEndpoint");
 
 // Create push subscription only if endpoint is explicitly configured
@@ -136,3 +154,7 @@ export const pushSubscriptionInstructions = pushSubscriberIp.apply((ip) =>
         ? "Waiting for LoadBalancer IP..."
         : `Run: pulumi config set pushEndpoint http://${ip}/push && pulumi up`
 );
+
+// GitHub Actions secrets (add these to GitHub repository secrets)
+export const gcpWorkloadIdentityProvider = githubActionsIdentity.workloadIdentityProvider;
+export const gcpServiceAccount = githubActionsIdentity.serviceAccountEmail;

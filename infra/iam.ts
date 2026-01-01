@@ -58,16 +58,106 @@ export function createServiceAccounts(
         });
     });
 
+    return { gkeNodeSa, benchmarkSa };
+}
+
+// Separate function to create Workload Identity binding after GKE cluster exists
+export function createWorkloadIdentityBinding(
+    project: gcp.organizations.Project,
+    benchmarkSa: gcp.serviceaccount.Account,
+    gkeCluster: gcp.container.Cluster
+) {
     // Workload Identity binding
     // Allows K8s SA "mq-bench/benchmark-sa" to impersonate GCP SA
-    const workloadIdentityBinding = new gcp.serviceaccount.IAMMember(
+    // Must depend on GKE cluster since the identity pool is created by GKE
+    return new gcp.serviceaccount.IAMMember(
         "workload-identity-binding",
         {
             serviceAccountId: benchmarkSa.name,
             role: "roles/iam.workloadIdentityUser",
             member: pulumi.interpolate`serviceAccount:${project.projectId}.svc.id.goog[mq-bench/benchmark-sa]`,
+        },
+        { dependsOn: [gkeCluster] }
+    );
+}
+
+// GitHub Actions Workload Identity Federation
+export function createGitHubActionsIdentity(
+    project: gcp.organizations.Project,
+    apis: gcp.projects.Service[],
+    githubRepo: string // format: "owner/repo"
+) {
+    // Workload Identity Pool for GitHub Actions
+    const pool = new gcp.iam.WorkloadIdentityPool(
+        "github-actions-pool",
+        {
+            project: project.projectId,
+            workloadIdentityPoolId: "github-actions",
+            displayName: "GitHub Actions",
+            description: "Workload Identity Pool for GitHub Actions CI/CD",
+        },
+        { dependsOn: apis }
+    );
+
+    // Workload Identity Provider for GitHub
+    const provider = new gcp.iam.WorkloadIdentityPoolProvider(
+        "github-actions-provider",
+        {
+            project: project.projectId,
+            workloadIdentityPoolId: pool.workloadIdentityPoolId,
+            workloadIdentityPoolProviderId: "github",
+            displayName: "GitHub",
+            attributeMapping: {
+                "google.subject": "assertion.sub",
+                "attribute.actor": "assertion.actor",
+                "attribute.repository": "assertion.repository",
+                "attribute.repository_owner": "assertion.repository_owner",
+            },
+            attributeCondition: `assertion.repository == "${githubRepo}"`,
+            oidc: {
+                issuerUri: "https://token.actions.githubusercontent.com",
+            },
         }
     );
 
-    return { gkeNodeSa, benchmarkSa, workloadIdentityBinding };
+    // Service account for GitHub Actions
+    const githubSa = new gcp.serviceaccount.Account(
+        "github-actions-sa",
+        {
+            project: project.projectId,
+            accountId: "github-actions",
+            displayName: "GitHub Actions Service Account",
+        },
+        { dependsOn: apis }
+    );
+
+    // IAM roles for GitHub Actions SA
+    const githubRoles = [
+        "roles/artifactregistry.writer",
+        "roles/container.developer",
+    ];
+
+    githubRoles.forEach((role, index) => {
+        new gcp.projects.IAMMember(`github-actions-${index}`, {
+            project: project.projectId,
+            role: role,
+            member: pulumi.interpolate`serviceAccount:${githubSa.email}`,
+        });
+    });
+
+    // Allow GitHub Actions to impersonate the service account
+    new gcp.serviceaccount.IAMMember("github-actions-wif-binding", {
+        serviceAccountId: githubSa.name,
+        role: "roles/iam.workloadIdentityUser",
+        member: pulumi.interpolate`principalSet://iam.googleapis.com/${pool.name}/attribute.repository/${githubRepo}`,
+    });
+
+    return {
+        pool,
+        provider,
+        githubSa,
+        // Output for GitHub secrets
+        workloadIdentityProvider: pulumi.interpolate`projects/${project.number}/locations/global/workloadIdentityPools/${pool.workloadIdentityPoolId}/providers/${provider.workloadIdentityPoolProviderId}`,
+        serviceAccountEmail: githubSa.email,
+    };
 }

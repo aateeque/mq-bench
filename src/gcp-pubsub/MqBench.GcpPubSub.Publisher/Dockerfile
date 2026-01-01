@@ -1,20 +1,23 @@
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 
-# Copy project files
-COPY ["MqBench.GcpPubSub.Common/MqBench.GcpPubSub.Common.csproj", "MqBench.GcpPubSub.Common/"]
-COPY ["MqBench.GcpPubSub.Publisher/MqBench.GcpPubSub.Publisher.csproj", "MqBench.GcpPubSub.Publisher/"]
+# Copy build configuration from repo root
 COPY ["Directory.Build.props", "."]
+COPY ["Directory.Packages.props", "."]
+
+# Copy project files
+COPY ["src/gcp-pubsub/MqBench.GcpPubSub.Common/MqBench.GcpPubSub.Common.csproj", "src/gcp-pubsub/MqBench.GcpPubSub.Common/"]
+COPY ["src/gcp-pubsub/MqBench.GcpPubSub.Publisher/MqBench.GcpPubSub.Publisher.csproj", "src/gcp-pubsub/MqBench.GcpPubSub.Publisher/"]
 
 # Restore
-RUN dotnet restore "MqBench.GcpPubSub.Publisher/MqBench.GcpPubSub.Publisher.csproj"
+RUN dotnet restore "src/gcp-pubsub/MqBench.GcpPubSub.Publisher/MqBench.GcpPubSub.Publisher.csproj"
 
 # Copy source
-COPY . .
+COPY ["src/gcp-pubsub/", "src/gcp-pubsub/"]
 
 # Build
-RUN dotnet publish "MqBench.GcpPubSub.Publisher/MqBench.GcpPubSub.Publisher.csproj" \
-    -c Release -o /app/publish --no-restore
+RUN dotnet publish "src/gcp-pubsub/MqBench.GcpPubSub.Publisher/MqBench.GcpPubSub.Publisher.csproj" \
+    -c Release -o /app/publish
 
 # Runtime image
 FROM mcr.microsoft.com/dotnet/runtime:9.0 AS runtime
