@@ -1,0 +1,195 @@
+name: Run Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      benchmark_type:
+        description: 'Benchmark to run'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - publisher
+          - pull-subscriber
+          - push-subscriber
+      message_count:
+        description: 'Number of messages'
+        required: true
+        default: '100000'
+        type: string
+      message_size:
+        description: 'Message size in bytes'
+        required: true
+        default: '1024'
+        type: string
+      concurrency:
+        description: 'Concurrency level'
+        required: true
+        default: '10'
+        type: string
+      duration_seconds:
+        description: 'Test duration (seconds, for subscribers)'
+        required: true
+        default: '300'
+        type: string
+
+env:
+  GCP_PROJECT_ID: mq-bench
+  GCP_REGION: us-central1
+  GKE_CLUSTER: mq-bench-gke
+  NAMESPACE: mq-bench
+
+jobs:
+  run-benchmark:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Get GKE credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ env.GKE_CLUSTER }}
+          location: ${{ env.GCP_REGION }}
+
+      - name: Run Publisher Benchmark
+        if: ${{ inputs.benchmark_type == 'all' || inputs.benchmark_type == 'publisher' }}
+        run: |
+          echo "🚀 Starting Publisher Benchmark"
+          echo "Messages: ${{ inputs.message_count }}, Size: ${{ inputs.message_size }}B, Concurrency: ${{ inputs.concurrency }}"
+
+          # Delete existing job if any
+          kubectl delete job benchmark-publisher -n ${{ env.NAMESPACE }} --ignore-not-found
+
+          # Create benchmark job
+          cat <<EOF | kubectl apply -f -
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: benchmark-publisher
+            namespace: ${{ env.NAMESPACE }}
+          spec:
+            ttlSecondsAfterFinished: 3600
+            template:
+              metadata:
+                labels:
+                  app: benchmark-publisher
+                  tags.datadoghq.com/env: prod
+                  tags.datadoghq.com/service: mq-bench-publisher
+                  tags.datadoghq.com/version: "${{ github.sha }}"
+              spec:
+                serviceAccountName: benchmark-sa
+                restartPolicy: Never
+                containers:
+                - name: publisher
+                  image: us-central1-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/mq-bench/publisher:latest
+                  env:
+                  - name: GCP_PROJECT_ID
+                    value: "${{ env.GCP_PROJECT_ID }}"
+                  - name: PUBSUB_TOPIC
+                    value: "mq-bench-topic"
+                  - name: MESSAGE_COUNT
+                    value: "${{ inputs.message_count }}"
+                  - name: MESSAGE_SIZE_BYTES
+                    value: "${{ inputs.message_size }}"
+                  - name: CONCURRENCY_LEVEL
+                    value: "${{ inputs.concurrency }}"
+                  - name: DD_ENV
+                    value: "prod"
+                  - name: DD_SERVICE
+                    value: "mq-bench-publisher"
+                  - name: DD_VERSION
+                    value: "${{ github.sha }}"
+                  resources:
+                    requests:
+                      memory: "256Mi"
+                      cpu: "500m"
+                    limits:
+                      memory: "512Mi"
+                      cpu: "1000m"
+          EOF
+
+          # Wait for job to complete
+          kubectl wait --for=condition=complete job/benchmark-publisher -n ${{ env.NAMESPACE }} --timeout=600s || true
+
+          echo "📊 Publisher Results:"
+          kubectl logs job/benchmark-publisher -n ${{ env.NAMESPACE }}
+
+      - name: Run Pull Subscriber Benchmark
+        if: ${{ inputs.benchmark_type == 'all' || inputs.benchmark_type == 'pull-subscriber' }}
+        run: |
+          echo "🚀 Starting Pull Subscriber Benchmark"
+
+          kubectl delete job benchmark-pull-subscriber -n ${{ env.NAMESPACE }} --ignore-not-found
+
+          cat <<EOF | kubectl apply -f -
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: benchmark-pull-subscriber
+            namespace: ${{ env.NAMESPACE }}
+          spec:
+            ttlSecondsAfterFinished: 3600
+            template:
+              metadata:
+                labels:
+                  app: benchmark-pull-subscriber
+                  tags.datadoghq.com/env: prod
+                  tags.datadoghq.com/service: mq-bench-pull-subscriber
+                  tags.datadoghq.com/version: "${{ github.sha }}"
+              spec:
+                serviceAccountName: benchmark-sa
+                restartPolicy: Never
+                containers:
+                - name: pull-subscriber
+                  image: us-central1-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/mq-bench/pull-subscriber:latest
+                  env:
+                  - name: GCP_PROJECT_ID
+                    value: "${{ env.GCP_PROJECT_ID }}"
+                  - name: PUBSUB_SUBSCRIPTION
+                    value: "mq-bench-pull-subscription"
+                  - name: MESSAGE_COUNT
+                    value: "${{ inputs.message_count }}"
+                  - name: TEST_DURATION_SECONDS
+                    value: "${{ inputs.duration_seconds }}"
+                  - name: DD_ENV
+                    value: "prod"
+                  - name: DD_SERVICE
+                    value: "mq-bench-pull-subscriber"
+                  - name: DD_VERSION
+                    value: "${{ github.sha }}"
+                  resources:
+                    requests:
+                      memory: "256Mi"
+                      cpu: "500m"
+                    limits:
+                      memory: "512Mi"
+                      cpu: "1000m"
+          EOF
+
+          kubectl wait --for=condition=complete job/benchmark-pull-subscriber -n ${{ env.NAMESPACE }} --timeout=600s || true
+
+          echo "📊 Pull Subscriber Results:"
+          kubectl logs job/benchmark-pull-subscriber -n ${{ env.NAMESPACE }}
+
+      - name: Summary
+        run: |
+          echo "## Benchmark Complete 🎉" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Parameter | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Type | ${{ inputs.benchmark_type }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Messages | ${{ inputs.message_count }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Size | ${{ inputs.message_size }} bytes |" >> $GITHUB_STEP_SUMMARY
+          echo "| Concurrency | ${{ inputs.concurrency }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Duration | ${{ inputs.duration_seconds }}s |" >> $GITHUB_STEP_SUMMARY
