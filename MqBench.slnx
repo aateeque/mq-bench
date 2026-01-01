@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Solution>
+  <Project Path="src/gcp-pubsub/MqBench.GcpPubSub.Common/MqBench.GcpPubSub.Common.csproj" />
+  <Project Path="src/gcp-pubsub/MqBench.GcpPubSub.Publisher/MqBench.GcpPubSub.Publisher.csproj" />
+  <Project Path="src/gcp-pubsub/MqBench.GcpPubSub.PullSubscriber/MqBench.GcpPubSub.PullSubscriber.csproj" />
+  <Project Path="src/gcp-pubsub/MqBench.GcpPubSub.PushSubscriber/MqBench.GcpPubSub.PushSubscriber.csproj" />
+</Solution>
