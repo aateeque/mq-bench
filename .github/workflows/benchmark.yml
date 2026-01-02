@@ -10,6 +10,7 @@ on:
         type: choice
         options:
           - all
+          - concurrent
           - publisher
           - pull-subscriber
           - push-subscriber
@@ -61,6 +62,156 @@ jobs:
         with:
           cluster_name: ${{ env.GKE_CLUSTER }}
           location: ${{ env.GCP_REGION }}
+
+      - name: Run Concurrent Benchmark
+        if: ${{ inputs.benchmark_type == 'concurrent' }}
+        run: |
+          echo "🚀 Starting Concurrent Publisher + Pull Subscriber Benchmark"
+          echo "Messages: ${{ inputs.message_count }}, Size: ${{ inputs.message_size }}B, Concurrency: ${{ inputs.concurrency }}"
+          echo "This mode runs both simultaneously for accurate end-to-end latency measurement"
+
+          # Cleanup existing jobs
+          kubectl delete job benchmark-concurrent-subscriber -n ${{ env.NAMESPACE }} --ignore-not-found
+          kubectl delete job benchmark-concurrent-publisher -n ${{ env.NAMESPACE }} --ignore-not-found
+
+          # 1. Start subscriber FIRST (it will wait for messages)
+          echo "📥 Starting Pull Subscriber..."
+          cat <<EOF | kubectl apply -f -
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: benchmark-concurrent-subscriber
+            namespace: ${{ env.NAMESPACE }}
+            labels:
+              benchmark.config/mode: "concurrent"
+              benchmark.config/message_count: "${{ inputs.message_count }}"
+          spec:
+            ttlSecondsAfterFinished: 86400
+            backoffLimit: 0
+            template:
+              metadata:
+                labels:
+                  app: benchmark-concurrent-subscriber
+                  tags.datadoghq.com/env: prod
+                  tags.datadoghq.com/service: mq-bench-pull-subscriber
+                  tags.datadoghq.com/version: "${{ github.sha }}"
+              spec:
+                serviceAccountName: benchmark-sa
+                restartPolicy: Never
+                containers:
+                - name: pull-subscriber
+                  image: us-central1-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/mq-bench/pull-subscriber:latest
+                  env:
+                  - name: GCP_PROJECT_ID
+                    value: "${{ env.GCP_PROJECT_ID }}"
+                  - name: PUBSUB_SUBSCRIPTION
+                    value: "mq-bench-pull-subscription"
+                  - name: MESSAGE_COUNT
+                    value: "${{ inputs.message_count }}"
+                  - name: TEST_DURATION_SECONDS
+                    value: "${{ inputs.duration_seconds }}"
+                  - name: DD_ENV
+                    value: "prod"
+                  - name: DD_SERVICE
+                    value: "mq-bench-pull-subscriber"
+                  - name: DD_VERSION
+                    value: "${{ github.sha }}"
+                  resources:
+                    requests:
+                      memory: "512Mi"
+                      cpu: "500m"
+                    limits:
+                      memory: "2Gi"
+                      cpu: "2000m"
+          EOF
+
+          # 2. Wait for subscriber pod to be ready
+          echo "⏳ Waiting for subscriber to be ready..."
+          kubectl wait --for=condition=Ready pod -l app=benchmark-concurrent-subscriber -n ${{ env.NAMESPACE }} --timeout=120s
+          sleep 5  # Extra buffer for Pub/Sub connection to establish
+
+          # 3. Start publisher
+          echo "📤 Starting Publisher..."
+          cat <<EOF | kubectl apply -f -
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: benchmark-concurrent-publisher
+            namespace: ${{ env.NAMESPACE }}
+            labels:
+              benchmark.config/mode: "concurrent"
+              benchmark.config/message_count: "${{ inputs.message_count }}"
+              benchmark.config/message_size: "${{ inputs.message_size }}"
+              benchmark.config/concurrency: "${{ inputs.concurrency }}"
+          spec:
+            ttlSecondsAfterFinished: 86400
+            backoffLimit: 0
+            template:
+              metadata:
+                labels:
+                  app: benchmark-concurrent-publisher
+                  tags.datadoghq.com/env: prod
+                  tags.datadoghq.com/service: mq-bench-publisher
+                  tags.datadoghq.com/version: "${{ github.sha }}"
+              spec:
+                serviceAccountName: benchmark-sa
+                restartPolicy: Never
+                containers:
+                - name: publisher
+                  image: us-central1-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/mq-bench/publisher:latest
+                  env:
+                  - name: GCP_PROJECT_ID
+                    value: "${{ env.GCP_PROJECT_ID }}"
+                  - name: PUBSUB_TOPIC
+                    value: "mq-bench-topic"
+                  - name: MESSAGE_COUNT
+                    value: "${{ inputs.message_count }}"
+                  - name: MESSAGE_SIZE_BYTES
+                    value: "${{ inputs.message_size }}"
+                  - name: CONCURRENCY_LEVEL
+                    value: "${{ inputs.concurrency }}"
+                  - name: DD_ENV
+                    value: "prod"
+                  - name: DD_SERVICE
+                    value: "mq-bench-publisher"
+                  - name: DD_VERSION
+                    value: "${{ github.sha }}"
+                  resources:
+                    requests:
+                      memory: "512Mi"
+                      cpu: "500m"
+                    limits:
+                      memory: "2Gi"
+                      cpu: "2000m"
+          EOF
+
+          # 4. Wait for publisher to complete
+          echo "⏳ Waiting for publisher to complete..."
+          if ! kubectl wait --for=condition=complete job/benchmark-concurrent-publisher -n ${{ env.NAMESPACE }} --timeout=600s; then
+            echo "❌ Publisher failed or timed out"
+            kubectl logs job/benchmark-concurrent-publisher -n ${{ env.NAMESPACE }} || true
+            exit 1
+          fi
+
+          # 5. Give subscriber time to process any remaining messages
+          echo "⏳ Waiting for subscriber to finish processing..."
+          sleep 30
+
+          # 6. Wait for subscriber to complete (or timeout gracefully)
+          kubectl wait --for=condition=complete job/benchmark-concurrent-subscriber -n ${{ env.NAMESPACE }} --timeout=60s || true
+
+          # 7. Collect results
+          echo ""
+          echo "============================================"
+          echo "📊 PUBLISHER RESULTS"
+          echo "============================================"
+          kubectl logs job/benchmark-concurrent-publisher -n ${{ env.NAMESPACE }}
+
+          echo ""
+          echo "============================================"
+          echo "📊 SUBSCRIBER RESULTS (TRUE END-TO-END LATENCY)"
+          echo "============================================"
+          kubectl logs job/benchmark-concurrent-subscriber -n ${{ env.NAMESPACE }}
 
       - name: Run Publisher Benchmark
         if: ${{ inputs.benchmark_type == 'all' || inputs.benchmark_type == 'publisher' }}
