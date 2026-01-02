@@ -24,6 +24,8 @@ Bonus metrics:
 * durability
 * scalability
 
+The project spings up GKE services written in C# .NET & sends messages around the network and measures the above metrics.
+
 ## Repository Structure
 
 * `src/`: Contains the source code for the benchmarking tools.
@@ -105,3 +107,24 @@ The benchmarking applications use these environment variables:
 - Use `ConcurrentDictionary`, `ConcurrentQueue`, etc. when thread-safe collections are needed
 - Avoid `lock` statements and `Monitor` class
 - Use `SemaphoreSlim` for limiting concurrency (not for mutual exclusion)
+
+### Comments
+
+Do not write verbose comments in code; comments should ONLY be written for esoteric or non-obvious logic. Code should be self-explanatory through clear naming and structure.
+
+## Workflow
+
+You MUST ensure that you maintain the following files:
+
+* `.claude/worklog.md` - This file is your rolling worklog. Everytime you finish a task fully, add an entry here with date, time spend a short description of what you did.
+* `.claude/todo.md` - This file is your rolling todo list. Everytime you think of something that needs to be done, add it here with a short description.
+* `.claude/tasks.md` - This file is your rolling milestones list. Everytime you break down a large task into smaller tasks, add the smaller tasks here with a short description with the milestone they belong to. Track the status of each task (not started, in progress, completed).
+* `.claude/notes.md` - This file is your rolling notes file. Everytime you learn something new, have an idea, or need to remember something, add it here with a short description.
+
+When you start working on a new task, pick one from the `.claude/tasks.md` file, mark it as "in progress", and start working on it. When you finish it, mark it as "completed" and add an entry to the `.claude/worklog.md` file.
+
+When you think of something new that needs to be done, add it to the `.claude/todo.md` file. When you break down a large task into smaller tasks, add the smaller tasks to the `.claude/tasks.md` file.
+
+### Cataloging progress
+
+To determine what are the *items* you should be writing in the above files, you should determine the *units of work* that you are doing. A *unit of work* is a small, self-contained piece of work that can be completed in a short amount of time (e.g., 30 minutes to 2 hours). These units of work are discrete and should be testable on their own. I should be able to follow along with your worklog and see the progress you are making towards completing the overall project using these units of work. I can also dictate new units of work to you as needed.
