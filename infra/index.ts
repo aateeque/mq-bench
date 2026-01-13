@@ -5,7 +5,7 @@ import * as k8s from "@pulumi/kubernetes";
 import { createProject } from "./project";
 import { enableApis } from "./apis";
 import { createNetworking } from "./networking";
-import { createServiceAccounts, createWorkloadIdentityBinding, createGitHubActionsIdentity } from "./iam";
+import { createServiceAccounts, createWorkloadIdentityBinding, createGitHubActionsIdentity, createDlqPublisherBinding } from "./iam";
 import { createGkeCluster } from "./gke";
 import { createPubSubResources, createPushSubscription } from "./pubsub";
 import { createArtifactRegistry } from "./artifact-registry";
@@ -47,6 +47,9 @@ const workloadIdentityBinding = createWorkloadIdentityBinding(
 
 // Create Pub/Sub topic and pull subscription
 const pubsub = createPubSubResources(project, apis);
+
+// Create DLQ publisher binding (allows Pub/Sub to write to dead letter topic)
+const dlqPublisherBinding = createDlqPublisherBinding(project, pubsub.deadLetterTopic);
 
 // Create Kubernetes provider using GKE cluster credentials
 const k8sProvider = new k8s.Provider("gke-k8s", {
@@ -140,6 +143,7 @@ if (pushEndpointOverride) {
     pushSubscription = createPushSubscription(
         project,
         pubsub.topic,
+        pubsub.deadLetterTopic,
         pulumi.output(pushEndpointOverride),
         serviceAccounts.benchmarkSa.email
     );
@@ -167,3 +171,7 @@ export const pushSubscriptionInstructions = pushSubscriberIp.apply((ip) =>
 // GitHub Actions secrets (add these to GitHub repository secrets)
 export const gcpWorkloadIdentityProvider = githubActionsIdentity.workloadIdentityProvider;
 export const gcpServiceAccount = githubActionsIdentity.serviceAccountEmail;
+
+// Dead letter queue exports
+export const dlqTopicName = pubsub.deadLetterTopic.name;
+export const dlqSubscriptionName = pubsub.dlqSubscription.name;

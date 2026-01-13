@@ -35,6 +35,10 @@ export function createPullSubscriberDeployment(
                                     { name: "GCP_PROJECT_ID", value: projectId },
                                     { name: "PUBSUB_SUBSCRIPTION", value: subscriptionName },
                                     { name: "MESSAGE_COUNT", value: "100000" },
+                                    { name: "DD_AGENT_HOST", value: "datadog-agent.mq-bench.svc.cluster.local" },
+                                    { name: "DD_DOGSTATSD_PORT", value: "8125" },
+                                    { name: "DD_ENABLED", value: "true" },
+                                    { name: "ENABLE_MESSAGE_TRACKING", value: "true" },
                                 ],
                                 resources: {
                                     requests: { cpu: "500m", memory: "512Mi" },

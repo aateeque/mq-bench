@@ -15,6 +15,21 @@ public class BenchmarkConfig
     public int ConcurrencyLevel { get; set; } = int.TryParse(Environment.GetEnvironmentVariable("CONCURRENCY_LEVEL"), out var cl) ? cl : 10;
     public TimeSpan TestDuration { get; set; } = int.TryParse(Environment.GetEnvironmentVariable("TEST_DURATION_SECONDS"), out var td) ? TimeSpan.FromSeconds(td) : TimeSpan.FromMinutes(5);
 
+    // DataDog DogStatsD configuration
+    public string DogStatsDHost { get; set; } = Environment.GetEnvironmentVariable("DD_AGENT_HOST") ?? "datadog-agent";
+    public int DogStatsDPort { get; set; } = int.TryParse(Environment.GetEnvironmentVariable("DD_DOGSTATSD_PORT"), out var p) ? p : 8125;
+    public bool EnableDogStatsD { get; set; } = bool.TryParse(Environment.GetEnvironmentVariable("DD_ENABLED"), out var e) && e;
+
+    // Stress testing configuration
+    public string StressProfile { get; set; } = Environment.GetEnvironmentVariable("STRESS_PROFILE") ?? "default";
+    public bool EnableBurstMode { get; set; } = bool.TryParse(Environment.GetEnvironmentVariable("BURST_MODE"), out var b) && b;
+    public int BurstSize { get; set; } = int.TryParse(Environment.GetEnvironmentVariable("BURST_SIZE"), out var bsz) ? bsz : 1000;
+    public int BurstIntervalMs { get; set; } = int.TryParse(Environment.GetEnvironmentVariable("BURST_INTERVAL_MS"), out var bi) ? bi : 100;
+
+    // Durability testing configuration
+    public bool EnableExactlyOnce { get; set; } = bool.TryParse(Environment.GetEnvironmentVariable("ENABLE_EXACTLY_ONCE"), out var eo) && eo;
+    public bool EnableMessageTracking { get; set; } = bool.TryParse(Environment.GetEnvironmentVariable("ENABLE_MESSAGE_TRACKING"), out var mt) && mt;
+
     /// <summary>
     /// Validates the configuration and throws if required values are missing.
     /// </summary>

@@ -34,6 +34,44 @@ on:
         required: true
         default: '300'
         type: string
+      stress_profile:
+        description: 'Stress test profile'
+        required: false
+        default: 'default'
+        type: choice
+        options:
+          - default
+          - small
+          - medium
+          - large
+          - xlarge
+          - large-payload
+      burst_mode:
+        description: 'Enable burst mode'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      burst_size:
+        description: 'Messages per burst'
+        required: false
+        default: '1000'
+        type: string
+      burst_interval_ms:
+        description: 'Interval between bursts (ms)'
+        required: false
+        default: '100'
+        type: string
+      enable_message_tracking:
+        description: 'Track message loss'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 
 env:
   GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID || 'mq-bench' }}
@@ -110,6 +148,16 @@ jobs:
                     value: "${{ inputs.message_count }}"
                   - name: TEST_DURATION_SECONDS
                     value: "${{ inputs.duration_seconds }}"
+                  - name: DD_AGENT_HOST
+                    value: "datadog-agent.mq-bench.svc.cluster.local"
+                  - name: DD_DOGSTATSD_PORT
+                    value: "8125"
+                  - name: DD_ENABLED
+                    value: "true"
+                  - name: ENABLE_MESSAGE_TRACKING
+                    value: "${{ inputs.enable_message_tracking }}"
+                  - name: STRESS_PROFILE
+                    value: "${{ inputs.stress_profile }}"
                   - name: DD_ENV
                     value: "prod"
                   - name: DD_SERVICE
@@ -170,6 +218,22 @@ jobs:
                     value: "${{ inputs.message_size }}"
                   - name: CONCURRENCY_LEVEL
                     value: "${{ inputs.concurrency }}"
+                  - name: DD_AGENT_HOST
+                    value: "datadog-agent.mq-bench.svc.cluster.local"
+                  - name: DD_DOGSTATSD_PORT
+                    value: "8125"
+                  - name: DD_ENABLED
+                    value: "true"
+                  - name: ENABLE_MESSAGE_TRACKING
+                    value: "${{ inputs.enable_message_tracking }}"
+                  - name: STRESS_PROFILE
+                    value: "${{ inputs.stress_profile }}"
+                  - name: BURST_MODE
+                    value: "${{ inputs.burst_mode }}"
+                  - name: BURST_SIZE
+                    value: "${{ inputs.burst_size }}"
+                  - name: BURST_INTERVAL_MS
+                    value: "${{ inputs.burst_interval_ms }}"
                   - name: DD_ENV
                     value: "prod"
                   - name: DD_SERVICE
@@ -260,6 +324,22 @@ jobs:
                     value: "${{ inputs.message_size }}"
                   - name: CONCURRENCY_LEVEL
                     value: "${{ inputs.concurrency }}"
+                  - name: DD_AGENT_HOST
+                    value: "datadog-agent.mq-bench.svc.cluster.local"
+                  - name: DD_DOGSTATSD_PORT
+                    value: "8125"
+                  - name: DD_ENABLED
+                    value: "true"
+                  - name: ENABLE_MESSAGE_TRACKING
+                    value: "${{ inputs.enable_message_tracking }}"
+                  - name: STRESS_PROFILE
+                    value: "${{ inputs.stress_profile }}"
+                  - name: BURST_MODE
+                    value: "${{ inputs.burst_mode }}"
+                  - name: BURST_SIZE
+                    value: "${{ inputs.burst_size }}"
+                  - name: BURST_INTERVAL_MS
+                    value: "${{ inputs.burst_interval_ms }}"
                   - name: DD_ENV
                     value: "prod"
                   - name: DD_SERVICE
@@ -326,6 +406,16 @@ jobs:
                     value: "${{ inputs.message_count }}"
                   - name: TEST_DURATION_SECONDS
                     value: "${{ inputs.duration_seconds }}"
+                  - name: DD_AGENT_HOST
+                    value: "datadog-agent.mq-bench.svc.cluster.local"
+                  - name: DD_DOGSTATSD_PORT
+                    value: "8125"
+                  - name: DD_ENABLED
+                    value: "true"
+                  - name: ENABLE_MESSAGE_TRACKING
+                    value: "${{ inputs.enable_message_tracking }}"
+                  - name: STRESS_PROFILE
+                    value: "${{ inputs.stress_profile }}"
                   - name: DD_ENV
                     value: "prod"
                   - name: DD_SERVICE
@@ -352,11 +442,28 @@ jobs:
 
       - name: Run Push Subscriber Benchmark
         if: ${{ inputs.benchmark_type == 'all' || inputs.benchmark_type == 'push-subscriber' }}
+        env:
+          MESSAGE_COUNT: ${{ inputs.message_count }}
+          MESSAGE_SIZE: ${{ inputs.message_size }}
+          CONCURRENCY: ${{ inputs.concurrency }}
+          DURATION_SECONDS: ${{ inputs.duration_seconds }}
+          ENABLE_TRACKING: ${{ inputs.enable_message_tracking }}
+          COMMIT_SHA: ${{ github.sha }}
         run: |
           echo "🚀 Starting Push Subscriber Benchmark"
-          echo "Note: Push subscriber runs as a deployment, monitoring for ${{ inputs.duration_seconds }}s"
+          echo "Note: Push subscriber runs as a deployment, monitoring for ${DURATION_SECONDS}s"
 
-          # Get current pod count and restart deployments to get fresh metrics
+          # Update the deployment with Datadog environment variables
+          kubectl set env deployment/mq-bench-push-subscriber -n ${{ env.NAMESPACE }} \
+            DD_AGENT_HOST=datadog-agent.mq-bench.svc.cluster.local \
+            DD_DOGSTATSD_PORT=8125 \
+            DD_ENABLED=true \
+            DD_ENV=prod \
+            DD_SERVICE=mq-bench-push-subscriber \
+            DD_VERSION="${COMMIT_SHA}" \
+            ENABLE_MESSAGE_TRACKING="${ENABLE_TRACKING}"
+
+          # Restart to apply new env vars and get fresh metrics
           kubectl rollout restart deployment/mq-bench-push-subscriber -n ${{ env.NAMESPACE }}
           kubectl rollout status deployment/mq-bench-push-subscriber -n ${{ env.NAMESPACE }} --timeout=120s
 
@@ -370,8 +477,8 @@ jobs:
             name: benchmark-push-load
             namespace: ${{ env.NAMESPACE }}
             labels:
-              benchmark.config/message_count: "${{ inputs.message_count }}"
-              benchmark.config/message_size: "${{ inputs.message_size }}"
+              benchmark.config/message_count: "${MESSAGE_COUNT}"
+              benchmark.config/message_size: "${MESSAGE_SIZE}"
           spec:
             ttlSecondsAfterFinished: 86400
             backoffLimit: 0
@@ -379,6 +486,9 @@ jobs:
               metadata:
                 labels:
                   app: benchmark-push-load
+                  tags.datadoghq.com/env: prod
+                  tags.datadoghq.com/service: mq-bench-publisher
+                  tags.datadoghq.com/version: "${COMMIT_SHA}"
               spec:
                 serviceAccountName: benchmark-sa
                 restartPolicy: Never
@@ -391,11 +501,23 @@ jobs:
                   - name: PUBSUB_TOPIC
                     value: "mq-bench-topic"
                   - name: MESSAGE_COUNT
-                    value: "${{ inputs.message_count }}"
+                    value: "${MESSAGE_COUNT}"
                   - name: MESSAGE_SIZE_BYTES
-                    value: "${{ inputs.message_size }}"
+                    value: "${MESSAGE_SIZE}"
                   - name: CONCURRENCY_LEVEL
-                    value: "${{ inputs.concurrency }}"
+                    value: "${CONCURRENCY}"
+                  - name: DD_AGENT_HOST
+                    value: "datadog-agent.mq-bench.svc.cluster.local"
+                  - name: DD_DOGSTATSD_PORT
+                    value: "8125"
+                  - name: DD_ENABLED
+                    value: "true"
+                  - name: DD_ENV
+                    value: "prod"
+                  - name: DD_SERVICE
+                    value: "mq-bench-publisher"
+                  - name: DD_VERSION
+                    value: "${COMMIT_SHA}"
                   resources:
                     requests:
                       memory: "512Mi"
@@ -418,14 +540,36 @@ jobs:
           done
 
       - name: Summary
+        env:
+          BENCHMARK_TYPE: ${{ inputs.benchmark_type }}
+          MESSAGE_COUNT: ${{ inputs.message_count }}
+          MESSAGE_SIZE: ${{ inputs.message_size }}
+          CONCURRENCY: ${{ inputs.concurrency }}
+          DURATION_SECONDS: ${{ inputs.duration_seconds }}
+          STRESS_PROFILE: ${{ inputs.stress_profile }}
+          BURST_MODE: ${{ inputs.burst_mode }}
+          ENABLE_TRACKING: ${{ inputs.enable_message_tracking }}
+          COMMIT_SHA: ${{ github.sha }}
         run: |
           echo "## Benchmark Complete 🎉" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Configuration" >> $GITHUB_STEP_SUMMARY
           echo "| Parameter | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Type | ${{ inputs.benchmark_type }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Messages | ${{ inputs.message_count }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Size | ${{ inputs.message_size }} bytes |" >> $GITHUB_STEP_SUMMARY
-          echo "| Concurrency | ${{ inputs.concurrency }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Duration | ${{ inputs.duration_seconds }}s |" >> $GITHUB_STEP_SUMMARY
+          echo "| Type | ${BENCHMARK_TYPE} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Messages | ${MESSAGE_COUNT} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Size | ${MESSAGE_SIZE} bytes |" >> $GITHUB_STEP_SUMMARY
+          echo "| Concurrency | ${CONCURRENCY} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Duration | ${DURATION_SECONDS}s |" >> $GITHUB_STEP_SUMMARY
+          echo "| Stress Profile | ${STRESS_PROFILE} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Burst Mode | ${BURST_MODE} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Message Tracking | ${ENABLE_TRACKING} |" >> $GITHUB_STEP_SUMMARY
           echo "| Project | ${{ env.GCP_PROJECT_ID }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Datadog Metrics" >> $GITHUB_STEP_SUMMARY
+          echo "Metrics are available in Datadog with tags:" >> $GITHUB_STEP_SUMMARY
+          echo "- \`env:prod\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`service:mq-bench-*\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`version:${COMMIT_SHA}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Key metrics: \`mq_bench.throughput.*\`, \`mq_bench.latency.*\`, \`mq_bench.messages.*\`" >> $GITHUB_STEP_SUMMARY

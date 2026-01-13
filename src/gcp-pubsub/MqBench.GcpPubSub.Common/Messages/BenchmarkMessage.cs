@@ -8,13 +8,16 @@ public class BenchmarkMessage
     public long TimestampTicks { get; set; } = DateTime.UtcNow.Ticks;
     public int SequenceNumber { get; set; }
     public byte[] Payload { get; set; } = [];
+    public string RunId { get; set; } = "";
+    public int RetryCount { get; set; }
 
-    public static BenchmarkMessage Create(int sequenceNumber, int payloadSizeBytes)
+    public static BenchmarkMessage Create(int sequenceNumber, int payloadSizeBytes, string? runId = null)
     {
         return new BenchmarkMessage
         {
             SequenceNumber = sequenceNumber,
-            Payload = new byte[payloadSizeBytes]
+            Payload = new byte[payloadSizeBytes],
+            RunId = runId ?? ""
         };
     }
 

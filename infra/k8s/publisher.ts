@@ -37,6 +37,10 @@ export function createPublisherDeployment(
                                     { name: "MESSAGE_COUNT", value: "100000" },
                                     { name: "MESSAGE_SIZE_BYTES", value: "1024" },
                                     { name: "CONCURRENCY_LEVEL", value: "10" },
+                                    { name: "DD_AGENT_HOST", value: "datadog-agent.mq-bench.svc.cluster.local" },
+                                    { name: "DD_DOGSTATSD_PORT", value: "8125" },
+                                    { name: "DD_ENABLED", value: "true" },
+                                    { name: "ENABLE_MESSAGE_TRACKING", value: "true" },
                                 ],
                                 resources: {
                                     requests: { cpu: "500m", memory: "512Mi" },
