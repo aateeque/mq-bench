@@ -95,3 +95,15 @@ Rolling log of completed work units.
 - Improved Summary step with comprehensive configuration table
 - Added Datadog metrics documentation to workflow summary
 - Applied security best practices: moved sensitive inputs to env: block
+
+### Created Datadog Dashboards for Benchmark Visualization (~1.5 hours)
+- Added @pulumi/datadog dependency to infrastructure project
+- Created `infra/datadog/dashboards.ts` with 4 comprehensive dashboards:
+  - **Overview Dashboard**: Key metrics at a glance (throughput, P99 latency, errors, message loss)
+  - **Latency Dashboard**: Percentile analysis (P50, P95, P99, P99.9, max), heatmaps, configuration breakdowns
+  - **Throughput Dashboard**: Message rates, data volumes, top performing runs, configuration comparisons
+  - **Reliability Dashboard**: Error tracking, message loss monitoring, test duration analysis
+- All dashboards include template variables for filtering by: env, service, run_id, message_size, concurrency
+- Created DashboardList to organize all dashboards in Datadog
+- Integrated into main index.ts with optional enablement via `datadogDashboards` config
+- Added dashboard URL exports for easy access after deployment

@@ -31,6 +31,23 @@ Milestone/task breakdown with status tracking.
 
 ---
 
+## Milestone: Datadog Dashboards for Benchmark Visualization
+
+**Goal**: Create comprehensive Datadog dashboards for viewing and analyzing benchmark runs.
+
+| Task | Status | Notes |
+|------|--------|-------|
+| Add @pulumi/datadog dependency | completed | Added to infra/package.json |
+| Create Overview Dashboard | completed | Key metrics: throughput, P99, errors, loss |
+| Create Latency Dashboard | completed | Percentiles, heatmap, config breakdowns |
+| Create Throughput Dashboard | completed | Message rates, data volumes, top runs |
+| Create Reliability Dashboard | completed | Errors, message loss, test duration |
+| Add template variables for filtering | completed | env, service, run_id, message_size, concurrency |
+| Integrate into index.ts | completed | Optional via `datadogDashboards` config |
+| Export dashboard URLs | completed | For easy access after deployment |
+
+---
+
 ## Milestone: GCP Pub/Sub Benchmarking (DONE)
 
 | Task | Status | Notes |

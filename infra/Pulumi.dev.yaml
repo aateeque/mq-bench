@@ -4,3 +4,5 @@ config:
   mq-bench-gcp-pubsub:billingAccount: XXXXX-XXXXX-XXXXX
   # mq-bench-gcp-pubsub:orgId: "123456789"
   mq-bench-gcp-pubsub:useAutopilot: "true"
+  mq-bench-gcp-pubsub:datadogDashboards: "true"
+encryptionsalt: v1:kfGm9FsiRB8=:v1:c3tAx2tUdensKDRq:zNmrgjGNljhc2pFktvdkYlkpYb/yew==

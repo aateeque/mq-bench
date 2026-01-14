@@ -20,4 +20,6 @@ Rolling list of items to be done (not yet broken into tasks).
 ## Low Priority
 
 - [x] Add DogStatsD metrics emission from apps directly (completed 2026-01-13)
-- [ ] Commit uncommitted changes (PublisherService fix, Push Subscriber Datadog, workflow updates)
+- [x] Create Datadog dashboards for benchmark visualization (completed 2026-01-13)
+- [ ] Commit uncommitted changes (PublisherService fix, Push Subscriber Datadog, workflow updates, Datadog dashboards)
+- [ ] Deploy Datadog dashboards (run `pulumi config set datadogDashboards true && pulumi up`)
