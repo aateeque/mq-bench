@@ -2,7 +2,7 @@
 
 High-level progress tracker for the MQ benchmarking project. Updated when significant chunks of work are completed.
 
-**Note**: For granular daily work logs, see `worklog.md`. This file is the executive summary.
+**Note**: This is the executive summary. For milestone/task breakdown, see `tasks.md`.
 
 ---
 
@@ -40,6 +40,7 @@ Benchmark message queue technologies (Google Pub/Sub, RabbitMQ, ZeroMQ, MQTT) on
 | Artifact Registry | Dec 2025 | Docker image storage |
 | GitHub Actions CI/CD | Jan 2026 | Build, test, benchmark workflows |
 | Workload Identity Federation | Jan 2026 | Keyless auth for GHA |
+| .NET 10 upgrade | Jan 14, 2026 | Latest .NET SDK |
 
 ---
 
@@ -144,11 +145,18 @@ Benchmark message queue technologies (Google Pub/Sub, RabbitMQ, ZeroMQ, MQTT) on
 
 ## Recent Updates
 
+### Jan 14, 2026
+- Addressed PR #12 review feedback:
+  - Upgraded target framework to .NET 10 (latest)
+  - Added memory limits to MessageTracker (max 1M messages, graceful degradation)
+  - Fixed StressTestProfiles.ApplyProfile to not mutate input
+  - Added proper exception logging in PublisherService
+
 ### Jan 13, 2026
 - Created 4 Datadog dashboards via Pulumi (Overview, Latency, Throughput, Reliability)
 - Added DogStatsD to Push Subscriber
 - Enhanced benchmark workflow with DD env vars
-- PR #12: Datadog dashboards (ready for merge)
+- PR #12: Datadog dashboards + stress test improvements
 
 ### Jan 3, 2026
 - Implemented stress test profiles (10K to 10M messages)
