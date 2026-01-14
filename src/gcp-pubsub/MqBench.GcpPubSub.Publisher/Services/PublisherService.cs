@@ -135,8 +135,13 @@ public class PublisherService : IAsyncDisposable
             metrics.RecordMessage(data.Length);
             _dogStatsD?.RecordLatency(latency);
         }
-        catch
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
+            // Expected during shutdown, don't count as error
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Publisher] Error publishing message: {ex.Message}");
             metrics.RecordError();
             _dogStatsD?.IncrementErrorCount();
         }
@@ -157,8 +162,13 @@ public class PublisherService : IAsyncDisposable
             metrics.RecordMessage(data.Length);
             _dogStatsD?.RecordLatency(latency);
         }
-        catch
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
+            // Expected during shutdown, don't count as error
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Publisher] Error publishing message: {ex.Message}");
             metrics.RecordError();
             _dogStatsD?.IncrementErrorCount();
         }

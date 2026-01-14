@@ -29,9 +29,28 @@ public static class StressTestProfiles
             return config;
 
         var profile = GetProfile(config.StressProfile);
-        config.MessageCount = profile.MessageCount;
-        config.MessageSizeBytes = profile.MessageSizeBytes;
-        return config;
+        return new BenchmarkConfig
+        {
+            ProjectId = config.ProjectId,
+            TopicId = config.TopicId,
+            SubscriptionId = config.SubscriptionId,
+            BenchmarkMode = config.BenchmarkMode,
+            MessageCount = profile.MessageCount,
+            MessageSizeBytes = profile.MessageSizeBytes,
+            BatchSize = config.BatchSize,
+            WarmupCount = config.WarmupCount,
+            ConcurrencyLevel = config.ConcurrencyLevel,
+            TestDuration = config.TestDuration,
+            DogStatsDHost = config.DogStatsDHost,
+            DogStatsDPort = config.DogStatsDPort,
+            EnableDogStatsD = config.EnableDogStatsD,
+            StressProfile = config.StressProfile,
+            EnableBurstMode = config.EnableBurstMode,
+            BurstSize = config.BurstSize,
+            BurstIntervalMs = config.BurstIntervalMs,
+            EnableExactlyOnce = config.EnableExactlyOnce,
+            EnableMessageTracking = config.EnableMessageTracking
+        };
     }
 
     private static BenchmarkConfig CreateProfile(int messageCount, int messageSizeBytes)
