@@ -81,6 +81,20 @@ export function createWorkloadIdentityBinding(
     );
 }
 
+// Grant Pub/Sub service account permission to publish to DLQ
+// This is the GCP-managed service account used for dead letter delivery
+export function createDlqPublisherBinding(
+    project: gcp.organizations.Project,
+    deadLetterTopic: gcp.pubsub.Topic
+) {
+    return new gcp.pubsub.TopicIAMMember("dlq-publisher", {
+        project: project.projectId,
+        topic: deadLetterTopic.name,
+        role: "roles/pubsub.publisher",
+        member: pulumi.interpolate`serviceAccount:service-${project.number}@gcp-sa-pubsub.iam.gserviceaccount.com`,
+    });
+}
+
 // GitHub Actions Workload Identity Federation
 export function createGitHubActionsIdentity(
     project: gcp.organizations.Project,

@@ -39,7 +39,7 @@ public class PushController : ControllerBase
             var publishTime = new DateTime(message.TimestampTicks, DateTimeKind.Utc);
             var latency = DateTime.UtcNow - publishTime;
 
-            _metricsService.RecordMessage(latency, data.Length);
+            _metricsService.RecordMessage(latency, data.Length, message.Id);
 
             return Ok();
         }

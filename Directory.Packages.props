@@ -4,6 +4,7 @@
     <PackageVersion Include="Google.Apis.Auth" Version="1.68.0" />
     <PackageVersion Include="Google.Cloud.PubSub.V1" Version="3.19.0" />
     <PackageVersion Include="HdrHistogram" Version="2.5.0" />
+    <PackageVersion Include="DogStatsD-CSharp-Client" Version="8.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
   </ItemGroup>
 </Project>
