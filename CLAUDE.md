@@ -116,14 +116,27 @@ Do not write verbose comments in code; comments should ONLY be written for esote
 
 You MUST ensure that you maintain the following files:
 
-* `.claude/worklog.md` - This file is your rolling worklog. Everytime you finish a task fully, add an entry here with date, time spend a short description of what you did.
-* `.claude/todo.md` - This file is your rolling todo list. Everytime you think of something that needs to be done, add it here with a short description.
-* `.claude/tasks.md` - This file is your rolling milestones list. Everytime you break down a large task into smaller tasks, add the smaller tasks here with a short description with the milestone they belong to. Track the status of each task (not started, in progress, completed).
-* `.claude/notes.md` - This file is your rolling notes file. Everytime you learn something new, have an idea, or need to remember something, add it here with a short description.
+* `.claude/WORKLOG.md` - **START HERE**. High-level executive summary of the project. Contains epics, milestones, and "What's Next". Update this when significant chunks of work are completed. Read this first to understand project status.
+* `.claude/worklog.md` - Granular daily worklog. Add entries with date, time spent, and description when you finish a task.
+* `.claude/todo.md` - Rolling todo list. Add items that need to be done but aren't yet broken into tasks.
+* `.claude/tasks.md` - Milestone/task breakdown. When you break down a large task into smaller tasks, add them here with status tracking.
+* `.claude/notes.md` - Learnings, observations, and things to remember.
 
-When you start working on a new task, pick one from the `.claude/tasks.md` file, mark it as "in progress", and start working on it. When you finish it, mark it as "completed" and add an entry to the `.claude/worklog.md` file.
+### Resuming Work
 
-When you think of something new that needs to be done, add it to the `.claude/todo.md` file. When you break down a large task into smaller tasks, add the smaller tasks to the `.claude/tasks.md` file.
+When starting a new session:
+1. Read `.claude/WORKLOG.md` first to understand the current state and what's next
+2. Check `.claude/todo.md` for any pending items
+3. Pick a task from `.claude/tasks.md` or "What's Next" in WORKLOG.md
+
+### During Work
+
+When you start working on a task, mark it as "in progress" in tasks.md. When you finish, mark it as "completed" and add an entry to worklog.md.
+
+When completing significant work (new features, milestones, PRs), update WORKLOG.md:
+1. Update the relevant Epic section with new milestones
+2. Add an entry to "Recent Updates" with date and bullet points
+3. Update "What's Next" if priorities change
 
 ### Cataloging progress
 
